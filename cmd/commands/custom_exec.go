@@ -18,10 +18,73 @@ package command
 
 import (
 	"fmt"
+	"strings"
 
+	"github.com/rook/kubectl-rook-ceph/pkg/exec"
 	"github.com/rook/kubectl-rook-ceph/pkg/filesystem"
+	"github.com/rook/kubectl-rook-ceph/pkg/logging"
 	"github.com/spf13/cobra"
+	"k8s.io/apimachinery/pkg/util/validation"
 )
+
+var ExecCmd = &cobra.Command{
+	Use:   "exec [component]",
+	Short: "Open an interactive shell in a Rook Ceph component",
+	Long: "Open an interactive shell in the Rook Ceph operator, toolbox, or a Ceph daemon pod.\n\n" +
+		"The component defaults to toolbox and can also be operator, mon-<id>, mgr-<id>, osd-<id>, mds-<id>, or rgw-<id>.",
+	Args: func(cmd *cobra.Command, args []string) error {
+		if err := cobra.MaximumNArgs(1)(cmd, args); err != nil {
+			return err
+		}
+		_, _, err := execTarget(args)
+		return err
+	},
+	Run: func(cmd *cobra.Command, args []string) {
+		labelSelector, container, err := execTarget(args)
+		if err != nil {
+			logging.Fatal(err)
+		}
+		namespace := cephClusterNamespace
+		if container == "rook-ceph-operator" {
+			namespace = operatorNamespace
+		}
+		if err := exec.RunShellInLabeledPod(cmd.Context(), clientSets, namespace, labelSelector, container); err != nil {
+			logging.Fatal(err)
+		}
+	},
+}
+
+func execTarget(args []string) (string, string, error) {
+	component := "toolbox"
+	if len(args) == 1 {
+		component = args[0]
+	}
+
+	if component == "toolbox" {
+		return "app=rook-ceph-tools", "rook-ceph-tools", nil
+	}
+	if component == "operator" {
+		return "app=rook-ceph-operator", "rook-ceph-operator", nil
+	}
+
+	daemonType, daemonID, found := strings.Cut(component, "-")
+	if !found || daemonID == "" || len(validation.IsValidLabelValue(daemonID)) != 0 {
+		return "", "", invalidExecComponent(component)
+	}
+
+	switch daemonType {
+	case "mon":
+		return fmt.Sprintf("app=rook-ceph-mon,mon=%s,mon_canary!=true", daemonID), daemonType, nil
+	case "mgr", "osd", "mds", "rgw":
+		return fmt.Sprintf("app=rook-ceph-%s,%s=%s", daemonType, daemonType, daemonID), daemonType, nil
+	default:
+		return "", "", invalidExecComponent(component)
+	}
+}
+
+func invalidExecComponent(component string) error {
+	return fmt.Errorf("invalid component %q: expected toolbox, operator, mon-<id>, mgr-<id>, osd-<id>, mds-<id>, or rgw-<id>", component)
+}
 
 func addCustomExecFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().String("pod-name", "", "Pod to execute commands in")

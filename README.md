@@ -62,6 +62,8 @@ These are args currently supported:
 
 - `rbd <args>` : Call a 'rbd' CLI command with arbitrary args
 
+- `exec [component]` : Open an interactive Bash shell in the operator, toolbox, or a Ceph daemon pod. The component defaults to `toolbox`; it can also be `operator`, `mon-<id>`, `mgr-<id>`, `osd-<id>`, `mds-<id>`, or `rgw-<id>`.
+
 - `mons` : Print mon endpoints
   - `restore-quorum <mon-name>` : Restore the mon quorum based on a single healthy mon since quorum was lost with the other mons
 
@@ -127,6 +129,7 @@ Visit docs below for complete details about each command and their flags uses.
 1. [Restore deleted CRs](docs/crd.md)
 1. [Destroy cluster](docs/destroy-cluster.md)
 1. [Running rados commands](docs/rados.md)
+1. [Open a component shell](docs/exec.md)
 1. [Multus validation](docs/multus.md)
 1. [Subvolume cleanup](docs/subvolume.md)
 1. [Snapshot cleanup](docs/cephfs-snapshots.md)
